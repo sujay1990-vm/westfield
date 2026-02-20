@@ -6,5 +6,5 @@ langchain==0.3.19
 langchain-openai==0.3.6
 langchain-community==0.3.18
 
-faiss-cpu==1.8.0.post1
+faiss-cpu==1.13.2
 pydantic==2.10.6
