@@ -1,5 +1,7 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Any
+import re
+
 
 class ExtractionFields(BaseModel):
     # Identifiers / parties
@@ -26,17 +28,44 @@ class ExtractionFields(BaseModel):
     permanency_claimed: Optional[bool] = Field(default=None, description="Whether permanency is claimed")
 
     # Damages (try to parse currency-like strings; keep as strings in v1)
-    past_medical: Optional[str] = Field(default=None, description="Past medical total if stated")
-    future_medical: Optional[str] = Field(default=None, description="Future medical total if stated")
-    past_lost_wages: Optional[str] = Field(default=None, description="Past lost wages if stated")
-    future_loss_earnings: Optional[str] = Field(default=None, description="Future earnings/loss if stated")
-    settlement_demand_amount: Optional[str] = Field(default=None, description="Total demand amount")
+    past_medical: Optional[float] = Field(default=None, description="Past medical total (number only, no $ or commas)")
+    future_medical: Optional[float] = Field(default=None, description="Future medical total (number only)")
+    past_lost_wages: Optional[float] = Field(default=None, description="Past lost wages (number only)")
+    future_loss_earnings: Optional[float] = Field(default=None, description="Future earnings loss (number only)")
+    settlement_demand_amount: Optional[float] = Field(default=None, description="Total demand amount (number only)")
+
 
     # Counsel/admin
     plaintiff_attorney_name: Optional[str] = Field(default=None, description="Attorney name")
     plaintiff_firm: Optional[str] = Field(default=None, description="Law firm")
     demand_date: Optional[str] = Field(default=None, description="Date of the demand letter")
     response_deadline: Optional[str] = Field(default=None, description="Response deadline if specified")
+
+    @field_validator("surgery_performed", "surgery_recommended", "future_treatment_claimed", "permanency_claimed", mode="before")
+    @classmethod
+    def coerce_bool(cls, v: Any):
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return bool(v)
+
+        s = str(v).strip().lower()
+
+        # clean yes/no variants
+        if s in {"true", "yes", "y", "1"}:
+            return True
+        if s in {"false", "no", "n", "0"}:
+            return False
+
+        # If the model puts descriptive text, treat non-empty evidence text as True
+        # (because it found something and tried to explain it)
+        if len(s) > 0:
+            return True
+
+        return None
+
 
 class EvidenceItem(BaseModel):
     page: int

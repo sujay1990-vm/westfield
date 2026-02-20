@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 import re
 from langchain.schema import Document
+import json
 
 from doc_pipeline.taxonomy import (
     DAMAGE_TYPES,
@@ -8,6 +9,40 @@ from doc_pipeline.taxonomy import (
     LANGUAGE_INTENSITY_RUBRIC,
 )
 from doc_pipeline.schemas import SignalsResult, SignalItem
+
+def _extract_json_object(text: str) -> str:
+    if not text:
+        raise ValueError("Empty LLM response")
+
+    cleaned = str(text).strip()
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+
+    # fast path
+    try:
+        json.loads(cleaned)
+        return cleaned
+    except Exception:
+        pass
+
+    start = cleaned.find("{")
+    if start == -1:
+        raise ValueError(f"No JSON object found. Response starts: {cleaned[:200]!r}")
+
+    depth = 0
+    for i in range(start, len(cleaned)):
+        ch = cleaned[i]
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                candidate = cleaned[start:i+1]
+                json.loads(candidate)
+                return candidate
+
+    raise ValueError("Could not extract JSON object from response.")
+
 
 def _regex_evidence_from_pages(pages, terms: List[str], max_hits: int = 6):
     hits = []
@@ -61,8 +96,9 @@ Excerpts:
 Return JSON only.
 """
     import json
-    dmg_raw = llm.invoke(dmg_prompt).content
-    dmg = json.loads(dmg_raw)
+    dmg_raw = str(llm.invoke(dmg_prompt).content)
+    dmg = json.loads(_extract_json_object(dmg_raw))
+
 
     # Aggregate to one signal item summarizing multi-label outcome
     present_labels = [x["label"] for x in dmg.get("present", [])]
@@ -117,8 +153,9 @@ Evidence B (retrieved excerpts):
 
 Return JSON only.
 """
-    tone_raw = llm.invoke(tone_prompt).content
-    tone = json.loads(tone_raw)
+    tone_raw = str(llm.invoke(tone_prompt).content)
+    tone = json.loads(_extract_json_object(tone_raw))
+
 
     signals.append(SignalItem(
         signal_name="Language Intensity",

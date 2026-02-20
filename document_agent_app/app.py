@@ -100,18 +100,28 @@ tab_qa, tab_sum, tab_ext, tab_sig = st.tabs(["Q&A (with citations)", "Summarize"
 with tab_qa:
     st.subheader("Ask questions about this document")
 
-    q = st.text_input("Question", placeholder="e.g., What is the settlement demand amount? What injuries are alleged?")
-    ask = st.button("Answer", disabled=(not q.strip()))
+    with st.form("qa_form", clear_on_submit=False):
+        q = st.text_input(
+            "Question",
+            placeholder="e.g., What is the settlement demand amount? What injuries are alleged?",
+            key="qa_question",
+        )
+        ask = st.form_submit_button("Answer", type="primary")
 
     if ask:
-        with st.spinner("Retrieving evidence + generating answer..."):
-            answer, citations = answer_question_with_citations(
-                llm=llm,
-                index=st.session_state.index,
-                question=q,
-                top_k=top_k,
+        if not q.strip():
+            st.warning("Type a question first.")
+        else:
+            with st.spinner("Retrieving evidence + generating answer..."):
+                answer, citations = answer_question_with_citations(
+                    llm=llm,
+                    index=st.session_state.index,
+                    question=q,
+                    top_k=top_k,
+                )
+            st.session_state.qa_history.append(
+                {"question": q, "answer": answer, "citations": citations}
             )
-        st.session_state.qa_history.append({"question": q, "answer": answer, "citations": citations})
 
     if st.session_state.qa_history:
         st.markdown("### History")
@@ -121,6 +131,7 @@ with tab_qa:
             if item["citations"]:
                 st.caption("Citations: " + "; ".join(item["citations"]))
             st.divider()
+
 
 # -------------------------
 # Summary
