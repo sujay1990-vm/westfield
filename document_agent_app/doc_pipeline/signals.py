@@ -10,6 +10,33 @@ from doc_pipeline.taxonomy import (
 )
 from doc_pipeline.schemas import SignalsResult, SignalItem
 
+from doc_pipeline.taxonomy import SIGNALS_V1
+
+def _find_keyword_hits(pages, keywords: list, max_hits: int = 6):
+    hits = []
+    kws = [k.lower() for k in keywords]
+    for p in pages:
+        txt = p["text"]
+        low = txt.lower()
+        for k in kws:
+            if k in low:
+                idx = low.find(k)
+                start = max(0, idx - 90)
+                end = min(len(txt), idx + len(k) + 140)
+                snippet = txt[start:end].replace("\n", " ").strip()
+                hits.append({"page": p["page"], "quote": snippet, "keyword": k})
+                if len(hits) >= max_hits:
+                    return hits
+    return hits
+
+def _collect_all_keywords(signal_def: dict) -> list:
+    # flatten all category keywords into one list
+    out = []
+    for _, kws in signal_def.get("keywords", {}).items():
+        out.extend(kws)
+    return out
+
+
 def _extract_json_object(text: str) -> str:
     if not text:
         raise ValueError("Empty LLM response")
@@ -59,6 +86,58 @@ def _regex_evidence_from_pages(pages, terms: List[str], max_hits: int = 6):
                 if len(hits) >= max_hits:
                     return hits
     return hits
+
+def _infer_generic_signal(llm, index, pages, signal_name: str, top_k: int = 5):
+    sig = SIGNALS_V1[signal_name]
+
+    # 1) retrieve excerpts likely relevant
+    docs = index.similarity_search(sig["query"], k=top_k)
+    retrieved = "\n\n".join([f"[p.{d.metadata.get('page')}] {d.page_content}" for d in docs])
+
+    # 2) keyword scan across whole doc for “hard evidence”
+    hits = _find_keyword_hits(pages, _collect_all_keywords(sig), max_hits=8)
+    hit_text = "\n".join([f"[p.{h['page']}] {h['quote']}" for h in hits]) if hits else "None found by keyword scan."
+
+    # 3) ask LLM to choose categories strictly from evidence
+    cats = sig["categories"]
+    interpretation = sig.get("interpretation", {})
+
+    if sig["type"] == "categorical_multi":
+        schema_text = """Return JSON:
+{
+  "selected": [{"category": "<one of the categories>", "page": <int>, "quote": "<short quote>", "confidence": <0..1>}],
+  "notes": "<short note>"
+}"""
+    else:
+        schema_text = """Return JSON:
+{
+  "selected": {"category": "<one of the categories>", "page": <int|null>, "quote": "<short quote|null>", "confidence": <0..1>},
+  "notes": "<short note>"
+}"""
+
+    prompt = f"""You are inferring the signal: {signal_name}
+
+STRICT OUTPUT RULES:
+- Output MUST be valid JSON only (no markdown).
+- Choose ONLY from these categories: {cats}
+- Use ONLY the evidence below. If nothing supports a category, choose the most conservative option.
+- Provide short quote + page for each selection.
+
+Evidence A (keyword hits):
+{hit_text}
+
+Evidence B (retrieved excerpts):
+{retrieved}
+
+{schema_text}
+Return JSON only.
+"""
+    raw = str(llm.invoke(prompt).content)
+    data = json.loads(_extract_json_object(raw))
+
+    return data, interpretation
+
+
 
 def infer_signals(llm, index, pages, top_k: int = 5) -> Dict[str, Any]:
     signals: List[SignalItem] = []
@@ -166,6 +245,41 @@ Return JSON only.
         page=tone.get("page"),
         notes=tone.get("notes"),
     ))
+
+    # --- Additional signals (v1 packs) ---
+    for name in ["Witness", "Liability Clarity"]:
+        out, interp = _infer_generic_signal(llm, index, pages, name, top_k=top_k)
+
+        if SIGNALS_V1[name]["type"] == "categorical_multi":
+            selected = out.get("selected", [])
+            if selected:
+                # pick first as representative evidence
+                rep = selected[0]
+                value = ", ".join([s["category"] for s in selected])
+                notes = out.get("notes")
+                signals.append(SignalItem(
+                    signal_name=name,
+                    value=value,
+                    score=None,
+                    confidence=float(rep.get("confidence", 0.6)),
+                    evidence_quote=rep.get("quote"),
+                    page=int(rep.get("page")) if rep.get("page") else None,
+                    notes=notes
+                ))
+            else:
+                signals.append(SignalItem(signal_name=name, value="None detected", confidence=0.5, notes=out.get("notes")))
+        else:
+            sel = out.get("selected", {})
+            cat = sel.get("category", "No Liability Facts")
+            signals.append(SignalItem(
+                signal_name=name,
+                value=cat,
+                confidence=float(sel.get("confidence", 0.6)),
+                evidence_quote=sel.get("quote"),
+                page=sel.get("page"),
+                notes=out.get("notes"),
+            ))
+
 
     validated = SignalsResult(signals=signals)
     return {"signals": [s.model_dump() for s in validated.signals]}
