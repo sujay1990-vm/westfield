@@ -247,7 +247,7 @@ Return JSON only.
     ))
 
     # --- Additional signals (v1 packs) ---
-    for name in ["Witness", "Liability Clarity"]:
+    for name in SIGNALS_V1.keys():
         out, interp = _infer_generic_signal(llm, index, pages, name, top_k=top_k)
 
         if SIGNALS_V1[name]["type"] == "categorical_multi":
