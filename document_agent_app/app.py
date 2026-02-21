@@ -92,12 +92,22 @@ if not st.session_state.index:
 
 llm = get_llm()
 
-tab_qa, tab_sum, tab_ext, tab_sig = st.tabs(["Q&A (with citations)", "Summarize", "Extract Fields", "Infer Signals"])
+# --- Controlled navigation (doesn't jump on rerun) ---
+if "active_view" not in st.session_state:
+    st.session_state.active_view = "Q&A (with citations)"
+
+view = st.radio(
+    "Mode",
+    ["Q&A (with citations)", "Summarize", "Extract Fields", "Infer Signals"],
+    horizontal=True,
+    key="active_view",
+    label_visibility="collapsed",
+)
 
 # -------------------------
 # Q&A
 # -------------------------
-with tab_qa:
+if view == "Q&A (with citations)":
     st.subheader("Ask questions about this document")
 
     with st.form("qa_form", clear_on_submit=False):
@@ -132,11 +142,10 @@ with tab_qa:
                 st.caption("Citations: " + "; ".join(item["citations"]))
             st.divider()
 
-
 # -------------------------
 # Summary
 # -------------------------
-with tab_sum:
+elif view == "Summarize":
     st.subheader("Generate a clean summary")
     if st.session_state.summary is None:
         if st.button("Create summary", type="primary"):
@@ -148,7 +157,12 @@ with tab_sum:
             st.session_state.summary = summary_text
 
     if st.session_state.summary:
-        st.text_area("Summary", value=st.session_state.summary, height=260)
+        st.text_area(
+                "Summary",
+                value=st.session_state.summary,
+                height=650,          # increase as you like (e.g., 600–900)
+                label_visibility="collapsed",
+            )
         st.download_button(
             "Download summary.txt",
             data=to_txt_bytes(st.session_state.summary),
@@ -159,7 +173,7 @@ with tab_sum:
 # -------------------------
 # Extraction
 # -------------------------
-with tab_ext:
+elif view == "Extract Fields":
     st.subheader("Field extraction (strict schema, evidence-backed)")
 
     if st.session_state.extractions is None:
@@ -184,7 +198,6 @@ with tab_ext:
             for ev in evidence[:10]:
                 st.markdown(f"- **p.{ev['page']}** — {ev['quote']}")
 
-        # CSV export: one-row extraction
         df = pd.DataFrame([fields])
         st.download_button(
             "Download extractions.csv",
@@ -196,9 +209,10 @@ with tab_ext:
 # -------------------------
 # Signals
 # -------------------------
-with tab_sig:
+elif view == "Infer Signals":
     st.subheader("Signal inference (evidence-first taxonomy)")
 
+    # Keep user on this view after click (important)
     if st.session_state.signals is None:
         if st.button("Infer signals", type="primary"):
             with st.spinner("Inferring signals..."):
@@ -214,7 +228,6 @@ with tab_sig:
         st.markdown("### Signals")
         st.json(st.session_state.signals)
 
-        # Flatten to CSV-friendly rows
         rows = []
         for s in st.session_state.signals["signals"]:
             rows.append({
