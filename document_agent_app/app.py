@@ -191,12 +191,36 @@ elif view == "Extract Fields":
         evidence = st.session_state.extractions.get("evidence", [])
 
         st.markdown("### Extracted fields")
-        st.json(fields)
+        # Pretty key:value display
+        pretty_rows = []
+        for k, v in fields.items():
+            if v is None or v == "" or v == []:
+                continue
+            if isinstance(v, list):
+                v_disp = ", ".join([str(x) for x in v])
+            else:
+                v_disp = str(v)
+            pretty_rows.append({"Field": k.replace("_", " ").title(), "Value": v_disp})
 
-        if evidence:
-            st.markdown("### Evidence (high-signal quotes)")
-            for ev in evidence[:10]:
-                st.markdown(f"- **p.{ev['page']}** — {ev['quote']}")
+        if pretty_rows:
+            df_view = pd.DataFrame(pretty_rows)
+
+            st.data_editor(
+                df_view,
+                use_container_width=True,
+                hide_index=True,
+                height=650,  # increase as you like (600–900)
+                disabled=True,
+                column_config={
+                    "Field": st.column_config.TextColumn("Field", width="small"),
+                    "Value": st.column_config.TextColumn("Value", width="large"),
+                },
+            )
+        else:
+            st.info("No fields found.")
+
+        with st.expander("Show raw JSON"):
+            st.json(fields)
 
         df = pd.DataFrame([fields])
         st.download_button(
@@ -226,7 +250,22 @@ elif view == "Infer Signals":
 
     if st.session_state.signals:
         st.markdown("### Signals")
-        st.json(st.session_state.signals)
+        for s in st.session_state.signals["signals"]:
+            st.markdown(f"**{s['signal_name']}**: {s.get('value')}")
+            meta = []
+            if s.get("score") is not None:
+                meta.append(f"Score: {s['score']}")
+            if s.get("confidence") is not None:
+                meta.append(f"Confidence: {s['confidence']:.2f}" if isinstance(s['confidence'], (int, float)) else f"Confidence: {s['confidence']}")
+            if s.get("page"):
+                meta.append(f"Page: {s['page']}")
+            if meta:
+                st.caption(" | ".join(meta))
+            if s.get("evidence_quote"):
+                st.markdown(f"> {s['evidence_quote']}")
+            if s.get("notes"):
+                st.caption(s["notes"])
+            st.divider()
 
         rows = []
         for s in st.session_state.signals["signals"]:
