@@ -330,8 +330,8 @@ with tab_extract:
     else:
         st.info("No fields found.")
 
-    with st.expander("Show raw JSON"):
-        st.json(fields)
+    # with st.expander("Show raw JSON"):
+    #     st.json(fields)
 
     df = pd.DataFrame([fields])
     st.download_button(
