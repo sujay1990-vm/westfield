@@ -85,9 +85,9 @@ def render_wrapped_table(df: pd.DataFrame, max_height_px: int = 650):
       <table class="sig">
         <thead>
           <tr>
-            <th class="col-type">Signal Type</th>
-            <th class="col-val">Signal Inferred / Value</th>
-            <th class="col-ev">Evidence</th>
+            <th class="col-type">Signal</th>
+            <th class="col-val">Value</th>
+            <th class="col-ev">Exhibit</th>
             <th class="col-notes">Notes</th>
           </tr>
         </thead>
