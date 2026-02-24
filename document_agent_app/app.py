@@ -29,7 +29,7 @@ def render_wrapped_table(df: pd.DataFrame, max_height_px: int = 650):
 
     rows_html = []
     for _, r in df.iterrows():
-        ev = esc(r.get("Evidence", ""))
+        ev = esc(r.get("Exhibit", ""))
         notes = esc(r.get("Notes", ""))
 
         # convert newlines to <br> outside f-string expressions
@@ -38,8 +38,8 @@ def render_wrapped_table(df: pd.DataFrame, max_height_px: int = 650):
 
         rows_html.append(
             "<tr>"
-            f"<td class='col-type'>{esc(r.get('Signal Type',''))}</td>"
-            f"<td class='col-val'>{esc(r.get('Signal Inferred / Value',''))}</td>"
+            f"<td class='col-type'>{esc(r.get('Signal',''))}</td>"
+            f"<td class='col-val'>{esc(r.get('Value',''))}</td>"
             f"<td class='col-ev'>{ev}</td>"
             f"<td class='col-notes'>{notes}</td>"
             "</tr>"
@@ -151,6 +151,9 @@ with colB:
         st.caption(f"Last processed: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(st.session_state.processed_at))}")
 
 if process_btn:
+    if uploaded is None:
+        st.error("No file uploaded. Please upload a PDF first, then click Process.")
+        st.stop()
     # Reset state for new doc
     st.session_state.pages = None
     st.session_state.index = None
@@ -379,7 +382,7 @@ with tab_signals:
 
         rows.append({
             "Signal": name,
-            "Signal Value": value,
+            "Value": value,
             "Exhibit": evidence,
             "Notes": notes,
         })
