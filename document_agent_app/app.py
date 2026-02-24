@@ -135,7 +135,7 @@ st.session_state.setdefault("qa_history", [])
 
 # Upload
 
-uploaded = st.file_uploader("Upload a PDF (BI demand letter, complaint, report, etc.)", type=["pdf"])
+uploaded = st.file_uploader("Upload a document (BI demand letter, complaint, report, etc.)", type=["pdf"])
 
 colA, colB = st.columns([1, 1], gap="large")
 
