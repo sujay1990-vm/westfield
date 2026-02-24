@@ -378,9 +378,9 @@ with tab_signals:
             evidence = (evidence + "\n" if evidence else "") + f"({ ' | '.join(meta) })"
 
         rows.append({
-            "Signal Type": name,
-            "Signal Inferred / Value": value,
-            "Evidence": evidence,
+            "Signal": name,
+            "Signal Value": value,
+            "Exhibit": evidence,
             "Notes": notes,
         })
 
