@@ -24,15 +24,14 @@ class ExtractionFields(BaseModel):
     injuries_list: List[str] = Field(default_factory=list, description="List of injuries alleged")
     surgery_performed: Optional[bool] = Field(default=None, description="Whether surgery was performed")
     surgery_recommended: Optional[bool] = Field(default=None, description="Whether surgery was recommended")
-    future_treatment_claimed: Optional[bool] = Field(default=None, description="Whether future treatment is claimed")
     permanency_claimed: Optional[bool] = Field(default=None, description="Whether permanency is claimed")
 
     # Damages (try to parse currency-like strings; keep as strings in v1)
-    past_medical: Optional[float] = Field(default=None, description="Past medical total (number only, no $ or commas)")
-    future_medical: Optional[float] = Field(default=None, description="Future medical total (number only)")
-    past_lost_wages: Optional[float] = Field(default=None, description="Past lost wages (number only)")
-    future_loss_earnings: Optional[float] = Field(default=None, description="Future earnings loss (number only)")
-    settlement_demand_amount: Optional[float] = Field(default=None, description="Total demand amount (number only)")
+    medical_expenses_till_date: Optional[int] = Field(default=None, description="Past medical total (number only, $ value)")
+    projected_medical_cost: Optional[int] = Field(default=None, description="Future medical total (number only, $ value)")
+    lost_wages: Optional[int] = Field(default=None, description="Past lost wages (number only, $ value)")
+    future_loss_earnings: Optional[int] = Field(default=None, description="Future earnings loss (number only, $ value)")
+    settlement_demand_amount: Optional[int] = Field(default=None, description="Total demand amount (number only, $ value)")
 
 
     # Counsel/admin
@@ -41,7 +40,7 @@ class ExtractionFields(BaseModel):
     demand_date: Optional[str] = Field(default=None, description="Date of the demand letter")
     response_deadline: Optional[str] = Field(default=None, description="Response deadline if specified")
 
-    @field_validator("surgery_performed", "surgery_recommended", "future_treatment_claimed", "permanency_claimed", mode="before")
+    @field_validator("surgery_performed", "surgery_recommended", "permanency_claimed", mode="before")
     @classmethod
     def coerce_bool(cls, v: Any):
         if v is None:
