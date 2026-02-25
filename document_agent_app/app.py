@@ -21,6 +21,10 @@ import streamlit as st
 st.set_page_config(page_title="Insurance Document Agent", layout="wide")
 st.title("Raw Text to Analytics Ready")
 
+# MUST be before any st.session_state.is_processing reference
+if "is_processing" not in st.session_state:
+    st.session_state.is_processing = False
+
 def start_processing():
     st.session_state.is_processing = True
 
