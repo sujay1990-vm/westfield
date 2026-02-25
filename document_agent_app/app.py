@@ -14,14 +14,17 @@ from doc_pipeline.export import (
     to_txt_bytes,
 )
 
-st.set_page_config(page_title="Insurance Document Agent", layout="wide")
-
-st.title("Raw Text to Analytics Ready")
-
-
 import html
 import pandas as pd
 import streamlit as st
+
+st.set_page_config(page_title="Insurance Document Agent", layout="wide")
+st.title("Raw Text to Analytics Ready")
+
+def start_processing():
+    st.session_state.is_processing = True
+
+
 
 def render_wrapped_table(df: pd.DataFrame, max_height_px: int = 650):
     def esc(x):
@@ -140,8 +143,13 @@ uploaded = st.file_uploader("Upload a document (BI demand letter, complaint, rep
 colA, colB = st.columns([1, 1], gap="large")
 
 with colA:
-    # st.subheader("Process document")
-    process_btn = st.button("Process", type="primary", disabled=(uploaded is None), key="btn_process_doc")
+    st.button(
+        "Process",
+        type="primary",
+        key="btn_process_doc",
+        disabled=(uploaded is None) or st.session_state.is_processing,
+        on_click=start_processing,
+    )
 
 with colB:
     if st.session_state.get("processed_at"):
@@ -150,62 +158,65 @@ with colB:
         st.caption(f"Pages: {len(st.session_state.pages)}")
         st.caption(f"Last processed: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(st.session_state.processed_at))}")
 
-if process_btn:
+if st.session_state.is_processing:
     if uploaded is None:
         st.error("No file uploaded. Please upload a PDF first, then click Process.")
-        st.stop()
-    # Reset state for new doc
-    st.session_state.pages = None
-    st.session_state.index = None
-    st.session_state.chunks = None
-    st.session_state.extractions = None
-    st.session_state.signals = None
-    st.session_state.processed_at = None
-
-    llm = get_llm()
-    emb = get_embedding_model()
-
-    pdf_bytes = uploaded.read()
-    st.session_state.doc_name = uploaded.name
-
-    with st.spinner("Parsing PDF into per-page text..."):
-        pages = parse_pdf_to_pages(io.BytesIO(pdf_bytes))
-        st.session_state.pages = pages
-
-    with st.spinner("Chunking + embedding + building per-document index..."):
-        index, chunks = build_faiss_index(
-            pages=pages,
-            embedding_model=emb,
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-        )
-        # IMPORTANT: assign immediately
-        st.session_state.index = index
-        st.session_state.chunks = chunks
-
-    # HARD GUARD: if index build failed, stop
-    if st.session_state.index is None:
-        st.error("Index build failed; cannot run extraction/signals.")
+        st.session_state.is_processing = False
         st.stop()
 
-    # Kick off BOTH tasks AFTER index exists
-    with st.spinner("Extracting fields..."):
-        st.session_state.extractions = extract_fields(
-            llm=llm,
-            index=st.session_state.index,
-            top_k=top_k,
-        )
+    try:
+        # Reset state for new doc
+        st.session_state.pages = None
+        st.session_state.index = None
+        st.session_state.chunks = None
+        st.session_state.extractions = None
+        st.session_state.signals = None
+        st.session_state.processed_at = None
 
-    with st.spinner("Deriving insights..."):
-        st.session_state.signals = infer_signals(
-            llm=llm,
-            index=st.session_state.index,
-            pages=st.session_state.pages,
-            top_k=top_k,
-        )
+        llm = get_llm()
+        emb = get_embedding_model()
 
-    st.session_state.processed_at = time.time()
-    st.success("Done. Review results in the tabs below.")
+        pdf_bytes = uploaded.read()
+        st.session_state.doc_name = uploaded.name
+
+        with st.spinner("Parsing PDF into per-page text..."):
+            pages = parse_pdf_to_pages(io.BytesIO(pdf_bytes))
+            st.session_state.pages = pages
+
+        with st.spinner("Chunking + embedding + building per-document index..."):
+            index, chunks = build_faiss_index(
+                pages=pages,
+                embedding_model=emb,
+                chunk_size=chunk_size,
+                chunk_overlap=chunk_overlap,
+            )
+            st.session_state.index = index
+            st.session_state.chunks = chunks
+
+        if st.session_state.index is None:
+            st.error("Index build failed; cannot run extraction/signals.")
+            st.stop()
+
+        with st.spinner("Extracting fields..."):
+            st.session_state.extractions = extract_fields(
+                llm=llm,
+                index=st.session_state.index,
+                top_k=top_k,
+            )
+
+        with st.spinner("Deriving insights..."):
+            st.session_state.signals = infer_signals(
+                llm=llm,
+                index=st.session_state.index,
+                pages=st.session_state.pages,
+                top_k=top_k,
+            )
+
+        st.session_state.processed_at = time.time()
+        st.success("Done.")
+    finally:
+        st.session_state.is_processing = False
+        st.rerun()  # forces UI to refresh with button enabled again
 
 st.divider()
 
